@@ -1,0 +1,253 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>コーヒー豆セレクタ(シート連携)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+/* Layout: case-study strip on top, sticky search bar, filter rail + result list, detail drawer, compare tray at bottom. */
+:root{
+  --bg:#f5f2ef; --panel:#ffffff; --fg:#241a15; --muted:#6b5d55; --line:#e2d9d2;
+  --accent:#8a4b2a; --accent-fg:#ffffff; --accent-soft:#f3e4da;
+  --warn:#8a5a00; --warn-soft:#fff1cf; --end:#8a3434; --end-soft:#f6e1e1; --ok:#20734a; --ok-soft:#ddf2e6;
+  --chip:#ece5df; --focus:#c2540a;
+  --f-body:"Noto Sans JP","Hiragino Sans","Yu Gothic",Meiryo,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11171c; --panel:#1a2229; --fg:#e3eaf0; --muted:#97a6b3; --line:#2c3843;
+  --accent:#e0a07a; --accent-fg:#1d0e06; --accent-soft:#3a2418;
+  --warn:#e3b341; --warn-soft:#3a2f10; --end:#e59a9a; --end-soft:#3a2323; --ok:#6fd39e; --ok-soft:#173326;
+  --chip:#25303a; --focus:#f08a43; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11171c; --panel:#1a2229; --fg:#e3eaf0; --muted:#97a6b3; --line:#2c3843;
+  --accent:#e0a07a; --accent-fg:#1d0e06; --accent-soft:#3a2418;
+  --warn:#e3b341; --warn-soft:#3a2f10; --end:#e59a9a; --end-soft:#3a2323; --ok:#6fd39e; --ok-soft:#173326;
+  --chip:#25303a; --focus:#f08a43; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.6;padding-inline:16px;padding-block:0 96px}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.case{max-width:1280px;margin:16px auto 0;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.case summary{cursor:pointer;font-weight:700;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.case summary small{font-weight:400;color:var(--muted)}
+.casegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px 20px;margin-top:10px}
+.casegrid h3{font-size:.72rem;letter-spacing:.08em;color:var(--muted);margin:0 0 4px}
+.casegrid p,.casegrid ul{margin:0;font-size:.88rem}
+.casegrid ul{padding-left:1.1em}
+.demo{display:inline-block;background:var(--warn-soft);color:var(--warn);border-radius:4px;padding:0 8px;font-size:.75rem;font-weight:700}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:12px 10px;border-bottom:1px solid var(--line);margin-inline:-16px;padding-inline:16px}
+.top-in{max-width:1280px;margin-inline:auto;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+h1{font-size:1.05rem;font-weight:700;margin:0;white-space:nowrap}
+.searchwrap{flex:1 1 320px;min-width:0;display:flex;gap:8px}
+#q{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);font-size:15px}
+#q::placeholder{color:var(--muted)}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:8px 12px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:700}
+.wrap{max-width:1280px;margin-inline:auto;display:grid;grid-template-columns:230px minmax(0,1fr);gap:20px;padding-top:16px}
+@media (max-width:820px){.wrap{grid-template-columns:minmax(0,1fr)}}
+.rail{display:flex;flex-direction:column;gap:14px;min-width:0;align-self:start;position:sticky;top:calc(env(safe-area-inset-top,0px) + 76px)}
+@media (max-width:820px){.rail{position:static;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}}
+.rail h2{font-size:.72rem;letter-spacing:.08em;color:var(--muted);margin:0 0 6px}
+.rail select{width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+label.chk{display:flex;gap:8px;align-items:center;cursor:pointer}
+.hint{color:var(--muted);font-size:.8rem;margin:0}
+.exs{display:flex;flex-wrap:wrap;gap:6px}
+.ex{border:1px solid var(--line);background:var(--chip);border-radius:999px;padding:3px 10px;font-size:.8rem;cursor:pointer}
+.ex:hover{border-color:var(--accent)}
+.meta{display:flex;justify-content:space-between;gap:12px;align-items:center;color:var(--muted);font-size:.85rem;margin-bottom:10px;flex-wrap:wrap}
+.meta select{padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+.list{display:flex;flex-direction:column;gap:8px;min-width:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;cursor:pointer;min-width:0}
+.card:hover{border-color:var(--accent)}
+.h{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;min-width:0}
+.mdl{font-family:var(--f-mono);font-weight:500;font-size:1rem}
+.nm{color:var(--muted)}
+.price{font-family:var(--f-mono);font-size:.85rem;color:var(--fg);font-variant-numeric:tabular-nums}
+.tags{display:flex;flex-wrap:wrap;gap:6px;grid-column:1/-1}
+.tag{background:var(--chip);border-radius:4px;padding:0 7px;font-size:.75rem;color:var(--muted);white-space:nowrap}
+.tag.end{background:var(--end-soft);color:var(--end);font-weight:700}
+.tag.stock{background:var(--ok-soft);color:var(--ok);font-weight:700}
+.tag.chk{background:var(--warn-soft);color:var(--warn);font-weight:700}
+.tag.bdg{background:var(--accent-soft);color:var(--accent)}
+.sum{grid-column:1/-1;font-size:.86rem}
+.hit{grid-column:1/-1;font-size:.8rem;color:var(--muted);font-family:var(--f-mono);overflow-wrap:anywhere}
+mark{background:var(--warn-soft);color:inherit;border-radius:2px;padding:0 1px}
+.cmp{display:flex;align-items:center;gap:6px;align-self:start;font-size:.8rem;color:var(--muted);cursor:pointer;white-space:nowrap}
+.empty{padding:32px 16px;text-align:center;color:var(--muted);background:var(--panel);border:1px dashed var(--line);border-radius:8px}
+.veil{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:20}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(600px,100%);background:var(--panel);z-index:21;overflow-y:auto;padding:calc(16px + env(safe-area-inset-top,0px)) 18px calc(24px + env(safe-area-inset-bottom,0px));border-left:1px solid var(--line)}
+.drawer h3{margin:0;font-family:var(--f-mono);font-size:1.25rem;font-weight:500}
+.sub{color:var(--muted);margin:2px 0 10px}
+.drawer h4{font-size:.72rem;letter-spacing:.08em;color:var(--muted);margin:18px 0 6px}
+.spec{width:100%;border-collapse:collapse;font-size:.88rem}
+.spec th,.spec td{border-top:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top;overflow-wrap:anywhere}
+.spec th{width:34%;color:var(--muted);font-weight:500}
+.drawer ul{margin:0;padding-left:1.2em}
+.talk{border-left:3px solid var(--accent);padding:4px 10px}
+.close{float:right}
+.alt{display:flex;flex-wrap:wrap;gap:6px}
+.alt button{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 10px;cursor:pointer;text-align:left;font-size:.85rem}
+.alt button small{display:block;color:var(--muted);font-size:.75rem}
+.tray{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--panel);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px))}
+.tray-in{max-width:1280px;margin-inline:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chipx{display:inline-flex;gap:6px;align-items:center;background:var(--chip);border-radius:999px;padding:2px 4px 2px 10px;font-family:var(--f-mono);font-size:.82rem}
+.chipx button{border:0;background:transparent;cursor:pointer;color:var(--muted);padding:0 6px;font-size:1rem;line-height:1}
+.sheet{position:fixed;inset:0;z-index:30;background:var(--bg);overflow:auto;padding:calc(16px + env(safe-area-inset-top,0px)) 16px 16px}
+.sheet-in{max-width:1280px;margin-inline:auto}
+.cmpbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.cmpwrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+table.cmpt{border-collapse:collapse;min-width:100%;font-size:.86rem}
+table.cmpt th,table.cmpt td{border-top:1px solid var(--line);border-left:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top;min-width:160px;max-width:260px;overflow-wrap:anywhere}
+table.cmpt th:first-child{border-left:0;position:sticky;left:0;background:var(--panel);min-width:110px;color:var(--muted);font-weight:500}
+table.cmpt thead th{border-top:0;font-family:var(--f-mono);font-weight:500}
+table.cmpt tr.diff td{background:var(--warn-soft)}
+table.cmpt.onlydiff tbody tr:not(.diff){display:none}
+.dim{color:var(--muted)}
+.dsrc{font-size:.78rem;color:var(--muted);margin:0 0 8px}.dsrc.bad{color:var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:6px}
+.toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:8px;z-index:99;font-size:.9rem}
+</style>
+
+<details class="case" open>
+  <summary>制作事例:コーヒー豆専門店の商品検索・比較ツール(スプレッドシート連携版) <small>ポートフォリオ用デモ</small> <span class="demo">商品・メーカー・価格はすべて架空のサンプルです</span></summary>
+  <div class="casegrid">
+    <div><h3>困りごと</h3><p>豆の種類が多く、お客さまの好み(酸味・苦味・飲み方)に合う豆をスタッフ全員がすぐに提案できない。</p></div>
+    <div><h3>解決したこと</h3><p>産地・品種・精製方法・味の特徴まで横断検索し、飲み方で絞り込み、候補を並べて味を比較できる1ページのツールにした。</p></div>
+    <div><h3>主な機能</h3><ul><li>仕様の数値まで対象のAND検索</li><li>地域・生産国・飲み方・在庫での絞り込み</li><li>最大4種類の比較表(違いを強調)</li><li>お客さま向け紹介文のワンクリックコピー</li></ul></div>
+    <div><h3>技術・制作</h3><p>商品データはGoogleスプレッドシートで管理。お店がシートを直すだけで、ページを開き直すと最新の内容に変わる。サーバー不要、スマホ対応。AIを活用して制作。</p></div>
+  </div>
+</details>
+
+<div class="top"><div class="top-in">
+  <h1>コーヒー豆セレクタ</h1>
+  <form class="searchwrap" id="sf" role="search"><input id="q" type="search" autocomplete="off" placeholder="豆の名前・味・産地で検索 例: 浅煎り 華やか / チョコ / ナチュラル" aria-label="検索"><button class="btn" type="button" id="clr">クリア</button></form>
+</div></div>
+
+<div class="wrap">
+  <aside class="rail" aria-label="絞り込み">
+    <div><h2>地域</h2><select id="fc"></select></div>
+    <div><h2>生産国</h2><select id="fm"></select></div>
+    <div><h2>飲み方から探す</h2><select id="fz"></select></div>
+    <div><h2>特長</h2><select id="fb"></select></div>
+    <div><h2>状態</h2>
+      <label class="chk"><input type="checkbox" id="fs"> 在庫ありのみ</label>
+      <label class="chk"><input type="checkbox" id="fx"> 販売終了品も表示</label></div>
+    <div><h2>検索例</h2><div class="exs" id="exs"></div>
+      <p class="hint" style="margin-top:8px">空白で区切るとAND検索です。仕様の単位や数値も検索できます。</p></div>
+  </aside>
+  <main>
+    <p class="dsrc" id="dsrc">読み込み中…</p><div class="meta"><span id="cnt"></span>
+      <label>並び順 <select id="so"><option value="rel">関連順</option><option value="m">商品コード順</option><option value="p">価格が安い順</option><option value="c">地域順</option></select></label></div>
+    <div class="list" id="list"></div>
+  </main>
+</div>
+
+<div class="tray" id="tray" hidden><div class="tray-in"><span class="dim">比較</span><span id="trayc" style="display:contents"></span>
+  <button class="btn pri" id="cgo">比較表を開く</button><button class="btn" id="ccp">紹介文をコピー</button><button class="btn" id="cclr">全解除</button></div></div>
+<div id="ov"></div>
+
+<script type="application/json" id="data">{"cats": {"af": "アフリカ", "la": "中南米", "as": "アジア・太平洋", "bl": "ブレンド", "dc": "デカフェ"}, "items": [{"m": "ET-YRG", "n": "イルガチェフェ G1", "k": "エチオピア", "c": "af", "x": 0, "st": 1, "chk": 0, "b": ["店長おすすめ", "浅煎り好きに"], "z": ["ハンドドリップ", "アイス"], "s": "ジャスミンやレモンティーのような華やかな香り。冷めても甘さが続く。", "sp": {"産地": "ゲデオ地区", "品種": "エチオピア在来種", "精製方法": "ウォッシュト", "焙煎度": "浅煎り", "標高": "1,900〜2,200m", "酸味": "●●●●●", "苦味": "●○○○○", "コク": "●●○○○", "おすすめ抽出": "ハンドドリップ 92℃"}, "a": ["豆のまま／挽き方指定可(200g)"], "o": ["ドリッパー", "ペーパーフィルター"], "t": ["浅煎りデビューの1杯目に", "アイスにすると紅茶のような印象"], "p": 1680}, {"m": "ET-GJN", "n": "グジ ナチュラル", "k": "エチオピア", "c": "af", "x": 0, "st": 0, "chk": 1, "b": ["季節限定"], "z": ["ハンドドリップ"], "s": "ブルーベリーのような甘い香り。ナチュラル精製ならではの果実感。", "sp": {"産地": "グジ地区", "品種": "エチオピア在来種", "精製方法": "ナチュラル", "焙煎度": "浅煎り", "標高": "2,000〜2,300m", "酸味": "●●●●○", "苦味": "●○○○○", "コク": "●●●○○", "おすすめ抽出": "ハンドドリップ 90℃"}, "a": ["豆のまま／挽き方指定可(200g)"], "o": [], "t": ["「コーヒーが苦手」な人にも試してほしい", "入荷は年1回、残量は要確認"], "p": 1980}, {"m": "KE-AA", "n": "ケニア AA", "k": "ケニア", "c": "af", "x": 0, "st": 1, "chk": 0, "b": ["浅煎り好きに"], "z": ["ハンドドリップ", "カフェオレ"], "s": "カシスやトマトを思わせる力強い酸味としっかりしたボディ。", "sp": {"産地": "ニエリ", "品種": "SL28・SL34", "精製方法": "ウォッシュト", "焙煎度": "中煎り", "標高": "1,700〜1,900m", "酸味": "●●●●●", "苦味": "●●○○○", "コク": "●●●●○", "おすすめ抽出": "フレンチプレス"}, "a": ["豆のまま／挽き方指定可(200g)"], "o": ["フレンチプレス"], "t": ["酸味もコクも欲しい人に", "ミルクに負けない個性"], "p": 1880}, {"m": "RW-HV", "n": "ルワンダ フイエ", "k": "ルワンダ", "c": "af", "x": 1, "st": 0, "chk": 0, "b": [], "z": ["ハンドドリップ"], "s": "今季分は販売終了。次回入荷は春の予定。", "sp": {"産地": "フイエ", "品種": "ブルボン", "精製方法": "ウォッシュト", "焙煎度": "中浅煎り", "標高": "1,800m", "酸味": "●●●●○", "苦味": "●●○○○", "コク": "●●●○○", "おすすめ抽出": "ハンドドリップ 90℃"}, "a": ["豆のまま／挽き方指定可(200g)"], "o": [], "t": ["次回入荷のお知らせ登録を案内"], "p": 1780}, {"m": "GT-ANT", "n": "アンティグア", "k": "グアテマラ", "c": "la", "x": 0, "st": 1, "chk": 0, "b": ["初心者向け"], "z": ["ハンドドリップ", "カフェオレ"], "s": "チョコレートのような甘さと穏やかな酸味。毎日飲んで飽きない。", "sp": {"産地": "アンティグア", "品種": "ブルボン・カトゥーラ", "精製方法": "ウォッシュト", "焙煎度": "中深煎り", "標高": "1,500〜1,700m", "酸味": "●●●○○", "苦味": "●●●○○", "コク": "●●●●○", "おすすめ抽出": "ハンドドリップ 88℃"}, "a": ["豆のまま／挽き方指定可(200g)"], "o": [], "t": ["迷ったらまずこれ", "酸味・苦味のバランスが良い"], "p": 1480}, {"m": "CO-HUI", "n": "ウィラ スプレモ", "k": "コロンビア", "c": "la", "x": 0, "st": 1, "chk": 0, "b": ["初心者向け"], "z": ["ハンドドリップ", "アイス", "水出し"], "s": "キャラメルのような甘さとやわらかい酸味。水出しにもおすすめ。", "sp": {"産地": "ウィラ県", "品種": "カトゥーラ・カスティージョ", "精製方法": "ウォッシュト", "焙煎度": "中煎り", "標高": "1,600m", "酸味": "●●●○○", "苦味": "●●○○○", "コク": "●●●○○", "おすすめ抽出": "水出し 8時間"}, "a": ["豆のまま／挽き方指定可(200g)"], "o": ["水出しボトル"], "t": ["水出しにすると甘さが際立つ"], "p": 1380}, {"m": "BR-CER", "n": "セラード", "k": "ブラジル", "c": "la", "x": 0, "st": 1, "chk": 0, "b": ["初心者向け", "店長おすすめ"], "z": ["エスプレッソ", "カフェオレ"], "s": "ナッツとミルクチョコの香り。酸味が少なく、ミルクとよく合う。", "sp": {"産地": "ミナスジェライス州 セラード", "品種": "ムンドノーボ", "精製方法": "パルプドナチュラル", "焙煎度": "中深煎り", "標高": "1,100m", "酸味": "●○○○○", "苦味": "●●●○○", "コク": "●●●●○", "おすすめ抽出": "エスプレッソ"}, "a": ["豆のまま／挽き方指定可(200g)"], "o": [], "t": ["酸っぱいコーヒーが苦手な人に", "カフェオレ用に一番売れる"], "p": 1280}, {"m": "CR-TAR", "n": "タラス ハニー", "k": "コスタリカ", "c": "la", "x": 0, "st": 0, "chk": 1, "b": ["季節限定"], "z": ["ハンドドリップ"], "s": "ハニー精製のはちみつのような甘さ。口当たりがなめらか。", "sp": {"産地": "タラス地区", "品種": "カトゥーラ", "精製方法": "ハニー", "焙煎度": "中煎り", "標高": "1,700m", "酸味": "●●●○○", "苦味": "●●○○○", "コク": "●●●○○", "おすすめ抽出": "ハンドドリップ 90℃"}, "a": ["豆のまま／挽き方指定可(200g)"], "o": [], "t": ["精製方法の違いを伝えると話が広がる", "在庫は焙煎日により要確認"], "p": 1880}, {"m": "PA-GSH", "n": "ゲイシャ", "k": "パナマ", "c": "la", "x": 0, "st": 0, "chk": 0, "b": ["店長おすすめ", "季節限定"], "z": ["ハンドドリップ"], "s": "ベルガモットとジャスミンの香りが際立つ希少品種。特別な日の1杯に。", "sp": {"産地": "ボケテ", "品種": "ゲイシャ", "精製方法": "ウォッシュト", "焙煎度": "浅煎り", "標高": "1,800m", "酸味": "●●●●○", "苦味": "●○○○○", "コク": "●●○○○", "おすすめ抽出": "ハンドドリップ 93℃"}, "a": ["豆のまま(100g)"], "o": ["ドリッパー"], "t": ["贈り物の需要が高い", "100g単位で販売"], "p": 4800}, {"m": "ID-MDH", "n": "マンデリン G1", "k": "インドネシア", "c": "as", "x": 0, "st": 1, "chk": 0, "b": [], "z": ["カフェオレ", "アイス"], "s": "ハーブやスパイスの香りと重厚なコク。深煎りの代表格。", "sp": {"産地": "北スマトラ", "品種": "ティピカ系", "精製方法": "スマトラ式", "焙煎度": "深煎り", "標高": "1,300m", "酸味": "●○○○○", "苦味": "●●●●●", "コク": "●●●●●", "おすすめ抽出": "ネルドリップ"}, "a": ["豆のまま／挽き方指定可(200g)"], "o": [], "t": ["深煎り・苦味好きに", "アイスコーヒーの定番"], "p": 1580}, {"m": "VN-DL", "n": "ダラット アラビカ", "k": "ベトナム", "c": "as", "x": 0, "st": 1, "chk": 0, "b": [], "z": ["カフェオレ", "水出し"], "s": "ナッツのような香ばしさ。練乳を入れるベトナム式もおすすめ。", "sp": {"産地": "ラムドン省 ダラット", "品種": "カティモール", "精製方法": "ウォッシュト", "焙煎度": "深煎り", "標高": "1,500m", "酸味": "●○○○○", "苦味": "●●●●○", "コク": "●●●●○", "おすすめ抽出": "ベトナムフィン"}, "a": ["豆のまま／挽き方指定可(200g)"], "o": ["ベトナムフィン"], "t": ["練乳入りの飲み方を提案"], "p": 1180}, {"m": "JP-OKN", "n": "沖縄産", "k": "日本", "c": "as", "x": 0, "st": 0, "chk": 1, "b": ["季節限定"], "z": ["ハンドドリップ"], "s": "国産の希少なコーヒー。やさしい甘さと軽やかな口当たり。", "sp": {"産地": "沖縄本島北部", "品種": "ティピカ", "精製方法": "ウォッシュト", "焙煎度": "中煎り", "標高": "200m", "酸味": "●●○○○", "苦味": "●●○○○", "コク": "●●○○○", "おすすめ抽出": "ハンドドリップ 88℃"}, "a": ["豆のまま／挽き方指定可(200g)"], "o": [], "t": ["話題性があり贈り物に", "入荷量がごくわずか"], "p": 3800}, {"m": "BL-HOU", "n": "ハウスブレンド", "k": "ブラジル・コロンビア", "c": "bl", "x": 0, "st": 1, "chk": 0, "b": ["初心者向け", "店長おすすめ"], "z": ["ハンドドリップ", "カフェオレ", "エスプレッソ"], "s": "お店の顔となる中深煎りブレンド。どんな淹れ方でもバランスよく仕上がる。", "sp": {"産地": "—", "品種": "ブレンド", "精製方法": "—", "焙煎度": "中深煎り", "標高": "—", "酸味": "●●○○○", "苦味": "●●●○○", "コク": "●●●●○", "おすすめ抽出": "どの抽出でも可"}, "a": ["豆のまま／挽き方指定可(200g)"], "o": [], "t": ["初来店の人にまず試飲で", "定期便の人気No.1"], "p": 1180}, {"m": "BL-ESP", "n": "エスプレッソブレンド", "k": "ブラジル・インドネシア", "c": "bl", "x": 0, "st": 1, "chk": 0, "b": [], "z": ["エスプレッソ", "カフェオレ"], "s": "深いコクとカラメルの甘さ。ミルクと合わせてラテに。", "sp": {"産地": "—", "品種": "ブレンド", "精製方法": "—", "焙煎度": "深煎り", "標高": "—", "酸味": "●○○○○", "苦味": "●●●●○", "コク": "●●●●●", "おすすめ抽出": "エスプレッソ"}, "a": ["豆のまま／挽き方指定可(200g)"], "o": [], "t": ["家庭用エスプレッソマシン向けに細挽き対応"], "p": 1280}, {"m": "BL-ICE", "n": "アイスブレンド", "k": "グアテマラ・インドネシア", "c": "bl", "x": 0, "st": 1, "chk": 0, "b": ["季節限定"], "z": ["アイス", "水出し"], "s": "氷で薄まっても味が残るように深めに焙煎したブレンド。", "sp": {"産地": "—", "品種": "ブレンド", "精製方法": "—", "焙煎度": "深煎り", "標高": "—", "酸味": "●○○○○", "苦味": "●●●●○", "コク": "●●●●○", "おすすめ抽出": "急冷式アイス"}, "a": ["豆のまま／挽き方指定可(200g)"], "o": ["水出しボトル"], "t": ["夏の売れ筋", "水出しパックもあり"], "p": 1280}, {"m": "DC-CO", "n": "デカフェ コロンビア", "k": "コロンビア", "c": "dc", "x": 0, "st": 1, "chk": 0, "b": ["初心者向け"], "z": ["ハンドドリップ", "カフェオレ"], "s": "カフェインを99.9%除去。夜や妊娠中でも楽しめる。", "sp": {"産地": "ウィラ県", "品種": "カトゥーラ", "精製方法": "スイスウォーター", "焙煎度": "中煎り", "標高": "1,600m", "酸味": "●●○○○", "苦味": "●●○○○", "コク": "●●●○○", "おすすめ抽出": "ハンドドリップ 88℃"}, "a": ["豆のまま／挽き方指定可(200g)"], "o": [], "t": ["寝る前の1杯に", "味の違いを気にする人にも好評"], "p": 1580}, {"m": "DC-ET", "n": "デカフェ エチオピア", "k": "エチオピア", "c": "dc", "x": 0, "st": 0, "chk": 0, "b": ["浅煎り好きに"], "z": ["ハンドドリップ"], "s": "デカフェでもしっかり華やか。浅煎り好きのためのデカフェ。", "sp": {"産地": "シダモ", "品種": "エチオピア在来種", "精製方法": "CO2処理", "焙煎度": "中浅煎り", "標高": "2,000m", "酸味": "●●●●○", "苦味": "●○○○○", "コク": "●●○○○", "おすすめ抽出": "ハンドドリップ 90℃"}, "a": ["豆のまま／挽き方指定可(200g)"], "o": [], "t": ["デカフェでも香りを諦めたくない人に"], "p": 1780}]}</script>
+<script>
+/* ===== 設定:お店のスプレッドシートID(URLの /d/ と /edit の間)とシート名 ===== */
+var SHEET_ID='1bi_KDuqewUd2FbW9csJ7fxewHdxhh8PPUTFCjU-WHNQ', SHEET_NAME='';
+/* 列名の対応。ここにない列は「豆の情報」として詳細と比較表にそのまま並ぶ */
+var COL={code:'コード',name:'商品名',maker:'生産国',cat:'地域',price:'価格',unit:'単位',stock:'在庫',chk:'要確認',end:'販売終了',badge:'特長',scene:'飲み方',desc:'説明',sell:'販売単位',opt:'一緒に買われるもの',tips:'接客ポイント'};
+function parseCSV(t){var R=[],r=[],f='',q=0;t=t.replace(/^﻿/,'');for(var k=0;k<t.length;k++){var c=t[k];if(q){if(c=='"'){if(t[k+1]=='"'){f+='"';k++}else q=0}else f+=c}else if(c=='"')q=1;else if(c==','){r.push(f);f=''}else if(c=='\n'||c=='\r'){if(c=='\r'&&t[k+1]=='\n')k++;r.push(f);R.push(r);r=[];f=''}else f+=c}if(f!==''||r.length){r.push(f);R.push(r)}return R.filter(function(x){return x.some(function(v){return v.trim()!==''})})}
+function fromRows(R){var h=R[0].map(function(x){return x.trim()}),known={},cats={},items=[];Object.keys(COL).forEach(function(k){known[COL[k]]=1});
+  function L(v,re){return String(v||'').split(re||/[、,]/).map(function(x){return x.trim()}).filter(Boolean)}
+  function yes(v){v=String(v||'').trim();return v!==''&&!/^(なし|無|×|x|no|false|0|-)$/i.test(v)}
+  R.slice(1).forEach(function(row){var o={};h.forEach(function(k,j){o[k]=(row[j]||'').trim()});if(!o[COL.name]&&!o[COL.code])return;
+    var c=o[COL.cat]||'その他';cats[c]=c;var sp={};h.forEach(function(k){if(k&&!known[k]&&o[k])sp[k]=o[k]});
+    items.push({m:o[COL.code]||o[COL.name],n:o[COL.name]||'',k:o[COL.maker]||'',c:c,x:yes(o[COL.end])?1:0,st:yes(o[COL.stock])?1:0,chk:yes(o[COL.chk])?1:0,
+      b:L(o[COL.badge]),z:L(o[COL.scene]),s:o[COL.desc]||'',sp:sp,a:L(o[COL.sell]),o:L(o[COL.opt]),t:L(o[COL.tips],/[／\n]/),
+      p:parseFloat(String(o[COL.price]||'').replace(/[^\d.]/g,''))||0,u:o[COL.unit]||''})});
+  return {cats:cats,items:items}}
+function srcNote(t,bad){var e=document.getElementById('dsrc');e.textContent=t;e.className='dsrc'+(bad?' bad':'')}
+function load(){
+  if(!SHEET_ID||SHEET_ID.indexOf('__')===0){srcNote('見本データを表示しています(スプレッドシート未設定)',1);start(JSON.parse(document.getElementById('data').textContent));return}
+  var url='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:csv&headers=1'+(SHEET_NAME?'&sheet='+encodeURIComponent(SHEET_NAME):'');
+  fetch(url,{cache:'no-store'}).then(function(r){if(!r.ok)throw r.status;return r.text()}).then(function(t){
+    if(/^\s*</.test(t))throw 'html';var d=fromRows(parseCSV(t));if(!d.items.length)throw 'empty';
+    var n=new Date();srcNote('スプレッドシートから'+d.items.length+'件を読み込みました('+n.getHours()+':'+('0'+n.getMinutes()).slice(-2)+')');start(d)
+  }).catch(function(){srcNote('スプレッドシートを読み込めなかったため、見本データを表示しています。シートの共有設定(リンクを知っている全員が閲覧可)を確認してください。',1);start(JSON.parse(document.getElementById('data').textContent))})}
+function start(D){var CAT=D.cats,IT=D.items;
+var $=function(id){return document.getElementById(id)};
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function yen(i){return '¥'+i.p.toLocaleString('ja-JP')+(i.u?'/'+i.u:(i.p<4000?'/200g':'/100g'))}
+function uniq(a){return a.filter(function(v,i){return a.indexOf(v)===i})}
+function opts(el,list,all){el.innerHTML='<option value="">'+all+'</option>'+list.map(function(v){return '<option value="'+esc(v[0])+'">'+esc(v[1])+'</option>'}).join('')}
+opts($('fc'),Object.keys(CAT).map(function(k){return[k,CAT[k]]}),'すべて');
+opts($('fm'),uniq(IT.map(function(i){return i.k})).sort().map(function(v){return[v,v]}),'すべて');
+opts($('fz'),uniq([].concat.apply([],IT.map(function(i){return i.z}))).map(function(v){return[v,v]}),'すべて');
+opts($('fb'),uniq([].concat.apply([],IT.map(function(i){return i.b}))).map(function(v){return[v,v]}),'すべて');
+['浅煎り 華やか','チョコ','ナチュラル','深煎り','水出し','ミルク'].forEach(function(e){var b=document.createElement('button');b.className='ex';b.type='button';b.textContent=e;b.onclick=function(){$('q').value=e;run()};$('exs').appendChild(b)});
+IT.forEach(function(i){i._t=[i.m,i.n,i.k,CAT[i.c],i.s,i.z.join(' '),i.b.join(' '),i.t.join(' '),i.a.join(' '),i.o.join(' ')].concat(Object.keys(i.sp).map(function(k){return k+' '+i.sp[k]})).join(' ').toLowerCase()});
+var cmp=[],cur=[];
+function terms(){return $('q').value.trim().toLowerCase().split(/[\s　]+/).filter(Boolean)}
+function run(){
+  var t=terms(),c=$('fc').value,m=$('fm').value,z=$('fz').value,b=$('fb').value,s=$('fs').checked,x=$('fx').checked;
+  cur=IT.filter(function(i){
+    if(c&&i.c!==c)return 0;if(m&&i.k!==m)return 0;if(z&&i.z.indexOf(z)<0)return 0;if(b&&i.b.indexOf(b)<0)return 0;
+    if(s&&!i.st)return 0;if(!x&&i.x)return 0;
+    return t.every(function(w){return i._t.indexOf(w)>=0})});
+  cur.forEach(function(i){var sc=0;t.forEach(function(w){if(i.m.toLowerCase().indexOf(w)>=0)sc+=5;if(i.n.toLowerCase().indexOf(w)>=0)sc+=3;if(i.s.toLowerCase().indexOf(w)>=0)sc+=1});i._s=sc-i.x*10});
+  var o=$('so').value;
+  cur.sort(o==='m'?function(a,b){return a.m.localeCompare(b.m)}:o==='p'?function(a,b){return a.p-b.p}:o==='c'?function(a,b){return a.c.localeCompare(b.c)||a.m.localeCompare(b.m)}:function(a,b){return b._s-a._s||IT.indexOf(a)-IT.indexOf(b)});
+  render(t)}
+function hl(s,t){s=esc(s);t.forEach(function(w){var e=esc(w).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');s=s.replace(new RegExp('('+e+')','gi'),'<mark>$1</mark>')});return s}
+function hits(i,t){if(!t.length)return'';var r=[];Object.keys(i.sp).forEach(function(k){var v=k+': '+i.sp[k];if(t.some(function(w){return v.toLowerCase().indexOf(w)>=0}))r.push(hl(v,t))});return r.slice(0,2).join(' / ')}
+function tags(i){var h='';if(i.x)h+='<span class="tag end">販売終了</span>';else if(i.st)h+='<span class="tag stock">在庫あり</span>';if(i.chk)h+='<span class="tag chk">要確認</span>';h+='<span class="tag">'+esc(CAT[i.c])+'</span>';i.b.forEach(function(v){h+='<span class="tag bdg">'+esc(v)+'</span>'});return h}
+function render(t){
+  $('cnt').textContent=cur.length+'件 / 全'+IT.length+'件';
+  if(!cur.length){$('list').innerHTML='<div class="empty">条件に合う豆がありません。キーワードを減らすか、絞り込みを「すべて」に戻してください。</div>';return}
+  $('list').innerHTML=cur.map(function(i){var n=IT.indexOf(i),h=hits(i,t);
+    return '<div class="card" data-i="'+n+'"><div class="h"><span class="mdl">'+hl(i.m,t)+'</span><span class="nm">'+hl(i.n,t)+'</span><span class="nm">'+esc(i.k)+'</span><span class="price">'+yen(i)+'</span></div>'+
+    '<label class="cmp"><input type="checkbox" data-c="'+n+'"'+(cmp.indexOf(n)>=0?' checked':'')+'> 比較</label>'+
+    '<div class="tags">'+tags(i)+'</div><div class="sum">'+hl(i.s,t)+'</div>'+(h?'<div class="hit">'+h+'</div>':'')+'</div>'}).join('')}
+$('list').addEventListener('click',function(e){var cb=e.target.closest('[data-c]');if(cb){toggle(+cb.dataset.c);return}if(e.target.closest('.cmp'))return;var c=e.target.closest('.card');if(c)detail(+c.dataset.i)});
+function toggle(n){var k=cmp.indexOf(n);if(k>=0)cmp.splice(k,1);else{if(cmp.length>=4){toast('比較は4種類までです');run();return}cmp.push(n)}tray();run()}
+function tray(){$('tray').hidden=!cmp.length;$('trayc').innerHTML=cmp.map(function(n){return '<span class="chipx">'+esc(IT[n].m)+'<button type="button" aria-label="外す" data-r="'+n+'">×</button></span>'}).join('')}
+$('trayc').addEventListener('click',function(e){var b=e.target.closest('[data-r]');if(b)toggle(+b.dataset.r)});
+$('cclr').onclick=function(){cmp=[];tray();run()};
+function closeOv(){$('ov').innerHTML=''}
+function detail(n){var i=IT[n],t=terms();
+  var alts=IT.filter(function(a){return a!==i&&a.c===i.c&&!a.x}).slice(0,4);
+  $('ov').innerHTML='<div class="veil" id="veil"></div><div class="drawer" role="dialog" aria-label="'+esc(i.m)+'"><button class="btn close" type="button" id="dx">閉じる</button>'+
+  '<h3>'+esc(i.m)+'</h3><p class="sub">'+esc(i.n)+' / '+esc(i.k)+' / <span class="price">'+yen(i)+'</span></p><div class="tags">'+tags(i)+'</div>'+
+  '<h4>概要</h4><p style="margin:0">'+hl(i.s,t)+'</p>'+
+  '<h4>豆の情報と味</h4><table class="spec">'+Object.keys(i.sp).map(function(k){return '<tr><th>'+esc(k)+'</th><td>'+hl(i.sp[k],t)+'</td></tr>'}).join('')+'</table>'+
+  '<h4>販売単位</h4><ul>'+i.a.map(function(v){return '<li>'+esc(v)+'</li>'}).join('')+'</ul>'+
+  (i.o.length?'<h4>一緒に買われるもの</h4><ul>'+i.o.map(function(v){return '<li>'+esc(v)+'</li>'}).join('')+'</ul>':'')+
+  '<h4>接客のポイント</h4><div class="talk"><ul>'+i.t.map(function(v){return '<li>'+esc(v)+'</li>'}).join('')+'</ul></div>'+
+  '<h4>おすすめの飲み方</h4><p style="margin:0">'+esc(i.z.join('、'))+'</p>'+
+  (alts.length?'<h4>同じ地域の豆</h4><div class="alt">'+alts.map(function(a){return '<button type="button" data-a="'+IT.indexOf(a)+'">'+esc(a.m)+'<small>'+esc(a.n)+'</small></button>'}).join('')+'</div>':'')+
+  '<div style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri" type="button" id="dc">'+(cmp.indexOf(n)>=0?'比較から外す':'比較に追加')+'</button><button class="btn" type="button" id="dp">この豆の紹介文をコピー</button></div></div>';
+  $('veil').onclick=closeOv;$('dx').onclick=closeOv;$('dc').onclick=function(){toggle(n);detail(n)};$('dp').onclick=function(){copy(prop([n]))};
+  $('ov').querySelectorAll('[data-a]').forEach(function(b){b.onclick=function(){detail(+b.dataset.a)}})}
+function sheet(){var L=cmp.map(function(n){return IT[n]});
+  var keys=uniq([].concat.apply([],L.map(function(i){return Object.keys(i.sp)})));
+  function row(label,vals){var d=uniq(vals).length>1;return '<tr'+(d?' class="diff"':'')+'><th>'+esc(label)+'</th>'+vals.map(function(v){return '<td>'+(v?esc(v):'<span class="dim">—</span>')+'</td>'}).join('')+'</tr>'}
+  var body=row('銘柄',L.map(function(i){return i.n}))+row('生産国',L.map(function(i){return i.k}))+row('価格',L.map(function(i){return yen(i)}))+row('地域',L.map(function(i){return CAT[i.c]}))+
+    keys.map(function(k){return row(k,L.map(function(i){return i.sp[k]||''}))}).join('')+row('特長',L.map(function(i){return i.b.join('、')}))+row('販売単位',L.map(function(i){return i.a.join('、')}));
+  $('ov').innerHTML='<div class="sheet" role="dialog" aria-label="比較表"><div class="sheet-in"><div class="cmpbar"><button class="btn" type="button" id="sx">戻る</button><strong>比較表('+L.length+'種類)</strong><label class="chk"><input type="checkbox" id="od"> 違いがある行だけ表示</label><button class="btn" type="button" id="sp">紹介文をコピー</button></div>'+
+  '<div class="cmpwrap"><table class="cmpt" id="ct"><thead><tr><th>項目</th>'+L.map(function(i){return '<th>'+esc(i.m)+'</th>'}).join('')+'</tr></thead><tbody>'+body+'</tbody></table></div><p class="hint" style="margin-top:8px">色付きの行は豆ごとに値が違う項目です。</p></div></div>';
+  $('sx').onclick=closeOv;$('od').onchange=function(){$('ct').classList.toggle('onlydiff',this.checked)};$('sp').onclick=function(){copy(prop(cmp))}}
+$('cgo').onclick=sheet;
+function prop(ns){var L=ns.map(function(n){return IT[n]});
+  return 'お好みに合いそうなコーヒー豆をご紹介します。\n\n'+L.map(function(i){var ks=Object.keys(i.sp).slice(3,8);
+    return '■ '+i.m+'('+i.n+'/'+i.k+')\n'+'・'+i.s+'\n'+ks.map(function(k){return '・'+k+':'+i.sp[k]}).join('\n')+'\n・価格:'+yen(i)+(i.st?'(在庫あり)':'(焙煎日を確認してご連絡します)')}).join('\n\n')+
+  '\n\n店頭では試飲もできます。お気軽にお立ち寄りください。'}
+function toast(m){var d=document.createElement('div');d.className='toast';d.textContent=m;document.body.appendChild(d);setTimeout(function(){d.remove()},1800)}
+function copy(txt){var done=function(){toast('紹介文をコピーしました')};
+  try{navigator.clipboard.writeText(txt).then(done,fb)}catch(e){fb()}
+  function fb(){var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done()}catch(e){toast('コピーできませんでした')}ta.remove()}}
+$('ccp').onclick=function(){copy(prop(cmp))};
+['fc','fm','fz','fb','fs','fx','so'].forEach(function(id){$(id).onchange=run});
+var tm;$('q').oninput=function(){clearTimeout(tm);tm=setTimeout(run,150)};
+$('sf').onsubmit=function(e){e.preventDefault();run()};
+$('clr').onclick=function(){$('q').value='';run()};
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeOv()});
+run();
+}
+load();
+</script>
+
+</body></html>
